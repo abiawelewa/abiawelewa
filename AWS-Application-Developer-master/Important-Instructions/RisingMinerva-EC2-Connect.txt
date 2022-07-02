@@ -1,0 +1,9 @@
+# MAC
+chmod 400 "<Full path of key file>" # Give only required permissions to the PEM file
+ssh -i "C:\Users\<user>\Documents\KEYNAME.pem" ec2-user@3.88.45.24
+
+# Windows
+Follow the below steps to provide the right permissions to your key file
+https://superuser.com/questions/1296024/windows-ssh-permissions-for-private-key-are-too-open
+
+ssh -i "C:\Users\<user>\Documents\KEYNAME.pem" ec2-user@3.88.45.24

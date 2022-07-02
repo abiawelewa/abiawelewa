@@ -1,0 +1,33 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A sample YAML template for RISING MINERVA class
+Parameters:
+  RisingMinervaHostedZoneName: 
+    Description: Hosted Zone Name
+    Type: String
+    Default: risingminervaha.com. # Dot needs to be present after
+  RisingMinervaHostedRecordSetName: 
+    Description: Hosted Zone Record set name
+    Type: String
+    Default: weightednew.risingminervaha.com. # Dot needs to be present after
+Resources:
+    RisingMinervaDNS:
+      Type: AWS::Route53::RecordSetGroup
+      Properties:
+        HostedZoneName: !Ref RisingMinervaHostedZoneName
+        RecordSets:
+        - Name: !Ref RisingMinervaHostedRecordSetName
+          Type: CNAME
+          TTL: '10'
+          SetIdentifier: RMHA-WEST-NEW
+          Weight: '0'
+          ResourceRecords: 
+            - risingminervaalb-1390876562.us-west-2.elb.amazonaws.com
+                                            # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-importvalue.html
+                                            # Can't create cross-region stack references
+        - Name: !Ref RisingMinervaHostedRecordSetName
+          Type: CNAME
+          TTL: '10'
+          SetIdentifier: RMHA-EAST-NEW
+          Weight: '0'
+          ResourceRecords: 
+            - !ImportValue RisingMinervaALBDNS # exported value from the Cloudformation stack for ELBs in EAST region

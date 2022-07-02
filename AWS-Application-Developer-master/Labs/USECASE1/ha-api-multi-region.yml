@@ -1,0 +1,207 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: USECASE 1 for RISING MINERVA class - High Availability Python REST API to DynamoDB
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VpcId of your existing Virtual Private Cloud (VPC)
+    ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
+    Default: vpc-50759c28
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    ConstraintDescription: must be a list of at least two existing subnets associated
+      with at least two different availability zones. They should be residing in the
+      selected Virtual Private Cloud
+    Default: subnet-6b70b620,subnet-21bf847b,subnet-fc1eb698
+  Environment:
+    Type: 'String'
+    Description: Identifies to which enviornment the funciton belongs
+    Default: 'dev'
+    AllowedValues:
+    - 'dev'
+    - 'qa'
+    - 'prod'
+  IAMRole:
+    Type: 'String'
+    Description: IAM role to be attached to the instances
+    Default: RisingMinervaEC2Role    
+  ReadCapacityUnits:
+     Description: Provisioned read throughput
+     Type: Number
+     Default: '5'
+     MinValue: '5'
+     MaxValue: '10000'
+     ConstraintDescription: must be between 5 and 10000
+  WriteCapacityUnits:
+     Description: Provisioned write throughput
+     Type: Number
+     Default: '5'
+     MinValue: '5'
+     MaxValue: '10000'
+     ConstraintDescription: must be between 5 and 10000
+  CustomersTableName:
+     Type: String
+     Default: customers    
+Mappings:
+    InstanceTypes:
+        us-east-1:
+          dev: t2.micro
+          qa: t2.small
+          prod: t2.xlarge
+        us-west-2:
+          dev: t2.micro
+          qa: t2.small
+          prod: t2.xlarge
+    AMIIDs:
+        us-east-1:
+          dev: "ami-00dc79254d0461090"
+          qa: "ami-00dc79254d0461090"
+          prod: "ami-00dc79254d0461090"
+        us-west-2:
+          dev: "ami-0a85857bfc5345c38"
+          qa: "ami-0a85857bfc5345c38"
+          prod: "ami-0a85857bfc5345c38"
+    RisingMinervaKeyName:
+      us-east-1:
+        dev: "RahulEC2KyPair-EAST"
+        qa: "RahulEC2KyPair-EAST"
+        prod: "RahulEC2KyPair-EAST"
+      us-west-2:
+        dev: "RahulEC2KyPair-WEST"
+        qa: "RahulEC2KyPair-WEST"
+        prod: "RahulEC2KyPair-WEST"
+Resources:
+  RisingMinervaALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+        Ref: Subnets
+      Name: RisingMinervaALB
+      SecurityGroups:
+         - !GetAtt RisingMinervaHTTPSecuirtyGroup.GroupId       
+  RisingMinervaALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: RisingMinervaALBTargetGroup
+      LoadBalancerArn:
+        Ref: RisingMinervaALB
+      Port: '80'
+      Protocol: HTTP
+  RisingMinervaALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckPath: "/"
+      HealthCheckIntervalSeconds: 10
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId:
+        Ref: VpcId
+      TargetGroupAttributes:
+      - Key: stickiness.enabled
+        Value: false
+  RisingMinervaAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        Ref: Subnets
+      LaunchConfigurationName: !Ref RisingMinervaLaunchConfig
+      MinSize: '1'
+      MaxSize: '5'
+      DesiredCapacity: '2'
+      TargetGroupARNs:
+      - Ref: RisingMinervaALBTargetGroup
+  RisingMinervaLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: 
+            Fn::FindInMap:
+              - 'AMIIDs'
+              - Ref: 'AWS::Region'
+              - Ref: 'Environment'
+      InstanceType:
+            Fn::FindInMap:
+              - 'InstanceTypes'
+              - Ref: 'AWS::Region'
+              - Ref: 'Environment'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          #amazon-linux-extras install python3 -y
+          python3 -m venv my_venv # Create virtual environment
+          source my_venv/bin/activate # Activate the virtual environment
+          pip3 install flask
+          pip3 install flask-restful
+          pip3 install boto3
+          pip3 install requests           
+          aws s3 cp "s3://risingminervacodebase-rchaturvedi/ha-api-multi-region/ha-api-multi-region.py" app.py
+          python3 app.py
+          deactivate # Deactivate the virtual environment
+      KeyName: 
+          Fn::FindInMap:
+              - 'RisingMinervaKeyName'
+              - Ref: 'AWS::Region'
+              - Ref: 'Environment'
+      SecurityGroups: #Need to assign security group ids instead of names, otherwise it results in an error https://stackoverflow.com/questions/40273492/aws-cfn-the-parameter-groupname-cannot-be-used-with-the-parameter-subnet/40283829
+         - !GetAtt RisingMinervaHTTPSecuirtyGroup.GroupId
+         - !GetAtt RisingMinervaSSHSecuirtyGroup.GroupId
+      IamInstanceProfile: !Ref RisingMinervaInstanceProfile
+  RisingMinervaSSHSecuirtyGroup:
+   Type: 'AWS::EC2::SecurityGroup'
+   Properties:
+      GroupDescription: Enables SSH
+      SecurityGroupIngress:
+         - IpProtocol: tcp
+           CidrIp: 0.0.0.0/0
+           FromPort: 22
+           ToPort: 22
+  RisingMinervaHTTPSecuirtyGroup:
+   Type: 'AWS::EC2::SecurityGroup'
+   Properties:
+      GroupDescription: Enables HTTP
+      SecurityGroupIngress:
+         - IpProtocol: tcp
+           CidrIp: 0.0.0.0/0
+           FromPort: 80
+           ToPort: 80
+  RisingMinervaInstanceProfile:
+   Type: AWS::IAM::InstanceProfile
+   Properties:
+     Roles:
+     - Ref: IAMRole
+  Customers: 
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      AttributeDefinitions: 
+        - 
+          AttributeName: "customer_id"
+          AttributeType: "N"        
+      KeySchema: 
+        - 
+          AttributeName: "customer_id"
+          KeyType: "HASH"
+      ProvisionedThroughput: 
+        ReadCapacityUnits: !Ref ReadCapacityUnits
+        WriteCapacityUnits: !Ref WriteCapacityUnits
+      TableName: !Ref CustomersTableName
+Outputs:
+  WebsiteURL:
+    Value:
+      Fn::Join:
+      - ''
+      - - http://
+        - Fn::GetAtt:
+          - RisingMinervaALB
+          - DNSName
+        - "/"
+    Description: HA Website
+  RisingMinervaALBDNS:
+    Description: A reference to the Application Load Balancer/ARN
+    Value: !GetAtt RisingMinervaALB.DNSName
+    Export: 
+      Name: RisingMinervaALBDNS

@@ -1,0 +1,14 @@
+aws cloudformation create-stack --stack-name RM-HA-EAST --template-body "file://01 - RisingMinerva-EC2-CFT.yml" --region us-east-1 --output json --profile risingminervauser
+aws cloudformation delete-stack --stack-name RM-HA-EAST --region us-east-1 --output json --profile risingminervauser
+
+aws s3 ls --profile risingminervauser
+aws s3 ls risingminervacodebase --region us-east-1 --output json  --profile risingminervauser
+
+aws s3 mb "s3://rahultempbucket" --region us-east-1 --output json --profile 
+
+aws s3api create-bucket --bucket rahultempbucket --region us-east-1 --output json --profile risingminervauser
+aws s3api delete-bucket --bucket rahultempbucket --region us-east-1 --output json --profile risingminervauser
+
+aws sns publish --topic-arn %TOPICARN% --message "Hello World!" --profile risingminervauser
+aws sns delete-topic --topic-arn %TOPICARN% --profile risingminervauser
+aws sns list-topics --profile risingminervauser

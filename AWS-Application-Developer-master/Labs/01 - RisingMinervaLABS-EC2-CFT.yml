@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A sample YAML template for RISING MINERVA class
+Parameters:
+  RisingMinervaKeyName: 
+    Description: Key Name for the EC2 instance
+    Type: String
+    Default: RahulEC2KyPair-EAST
+  Environment:
+    Type: 'String'
+    Description: Identifies to which enviornment the funciton belongs
+    Default: 'dev'
+    AllowedValues:
+    - 'dev'
+    - 'qa'
+    - 'prod'
+Mappings:
+    InstanceTypes:
+        us-east-1:
+          dev: t2.micro
+          qa: t2.small
+          prod: t2.xlarge
+        us-west-2:
+          dev: t2.micro
+          qa: t2.small
+          prod: t2.xlarge
+Resources:
+  RisingMinervaWebServer: #An inline comment
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: "ami-00dc79254d0461090"
+      InstanceType: 
+                Fn::FindInMap:
+                  - 'InstanceTypes'
+                  - Ref: 'AWS::Region'
+                  - Ref: 'Environment'
+      KeyName: !Ref RisingMinervaKeyName
+      Tags:
+         - Key: "EC2Name"
+           Value: !Join ["_", [Rising, Minerva, EC2, Instance, !Ref "AWS::Region", !Ref Environment]]
+         - Key: "RegionName"
+           Value: !Ref AWS::Region
+      SecurityGroups:
+         - !Ref RisingMinervaSSHSecuirtyGroup #AWS CFT will manage the dependency and create RisingMinervaSSHSecuirtyGroup first
+         #- !Ref RisingMinervaHTTPSecuirtyGroup
+  RisingMinervaSSHSecuirtyGroup:
+   Type: 'AWS::EC2::SecurityGroup'
+   Properties:
+      GroupDescription: Enables SSH
+      SecurityGroupIngress:
+         - IpProtocol: tcp
+           CidrIp: 0.0.0.0/0
+           FromPort: 22
+           ToPort: 22
+  RisingMinervaHTTPSecuirtyGroup:
+   Type: 'AWS::EC2::SecurityGroup'
+   Properties:
+      GroupDescription: Enables HTTP
+      SecurityGroupIngress:
+         - IpProtocol: tcp
+           CidrIp: 0.0.0.0/0
+           FromPort: 80
+           ToPort: 80
+Outputs:
+  InstanceDNS:
+    Description: The = DNS name of the EC2
+    Value: !GetAtt 
+         - RisingMinervaWebServer
+         - PublicDnsName
+  SecurityGroupId:
+    Description: Security group created
+    Value: !Ref RisingMinervaSSHSecuirtyGroup
+  WebsiteURL:
+    Description: Website URL
+    Value:
+      Fn::Join:
+      - ''
+      - - http://
+        - Fn::GetAtt:
+          - RisingMinervaWebServer
+          - PublicDnsName
+        - "/"

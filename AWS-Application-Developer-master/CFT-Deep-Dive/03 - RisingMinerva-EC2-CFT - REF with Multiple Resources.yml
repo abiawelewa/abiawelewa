@@ -1,0 +1,24 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A sample YAML template for RISING MINERVA class
+Resources:
+  RisingMinervaEC2Instance: #An inline comment
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: "ami-00dc79254d0461090"
+      InstanceType: t2.micro
+      KeyName: RahulEC2KyPair-EAST
+      Tags:
+         - Key: "EC2 Name"
+           Value: !Join ["_", [Rising, Minerva, EC2, Instance]]
+      SecurityGroups:
+         - !Ref RisingMinervaSSHSecuirtyGroup #AWS CFT will manage the dependency and create RisingMinervaSSHSecuirtyGroup first
+ 
+  RisingMinervaSSHSecuirtyGroup:
+   Type: 'AWS::EC2::SecurityGroup'
+   Properties:
+      GroupDescription: Enables SSH
+      SecurityGroupIngress:
+         - IpProtocol: tcp
+           CidrIp: 0.0.0.0/0
+           FromPort: 22
+           ToPort: 22

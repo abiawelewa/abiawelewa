@@ -1,0 +1,9 @@
+#!/bin/bash -xe
+amazon-linux-extras install python3 -y
+python3 -m venv my_venv
+pip3 install flask --user
+pip3 install flask-restful --user
+pip3 install boto3 --user
+pip3 install requests --user
+aws s3 cp "s3://risingminervacodebase/lambda-restapi-dynamodb/11a - RisingMinerva- USECASE 1 - Python RESTAPI.py" app.py
+python3 app.py

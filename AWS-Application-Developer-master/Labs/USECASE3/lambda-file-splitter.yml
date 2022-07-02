@@ -1,0 +1,161 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CFT to create Lambda function with a file splitter logic
+Parameters:
+  Environment:
+    Default: dev
+    Description: 'What environment type is it (prod, qa, dev)?'
+    Type: String
+    AllowedValues:
+      - dev
+      - qa
+      - prod
+  LambdaMemSize:
+    Default: '512'
+    Description: Memory Size of Lambda
+    Type: Number
+  LambdaTimeOut:
+    Default: '300'
+    Description: TimeOut limit of Lambda
+    Type: Number
+  SplitterLambdaCodeS3Bucket:
+    Default: testdataengineeringabi
+    Description: S3 Bucket to Lambda code
+    Type: String 
+  SplitterLambdaCodeS3Key:
+    Default: filesplitter/lambda-file-splitter.py.zip
+    Description: S3 Key to Lambda code
+    Type: String
+  RisingMinervaS3InputBucket:
+    Default: risingminervainputdata-abi-awelewa
+    Description: S3 Bucket that will trigger the event, will be automatically created. Just give a name
+    Type: String
+Mappings:
+  IAMRole:
+    us-east-1:
+      dev: arn:aws:iam::104227806992:role/LamdaIAMRoleUseCase3
+      qa: arn:aws:iam::104227806992:role/LamdaIAMRoleUseCase3
+      prod: arn:aws:iam::104227806992:role/LamdaIAMRoleUseCase3
+    us-west-2:
+      dev: arn:aws:iam::104227806992:role/LamdaIAMRoleUseCase3
+      qa: arn:aws:iam::104227806992:role/LamdaIAMRoleUseCase3
+      prod: arn:aws:iam::104227806992:role/LamdaIAMRoleUseCase3
+  LambdaSubnets:
+    us-east-1:
+      dev:
+        - subnet-0d692b01cb674c1cf
+        - subnet-071d6ad9458bf9930
+        - subnet-07f96ebbfc41fb4aa 
+        - subnet-022d0c5b044df3fea
+        - subnet-00e0f380233928e54
+        - subnet-0576e9074b7107ed9
+      qa:
+        - subnet-0d692b01cb674c1cf
+        - subnet-071d6ad9458bf9930
+        - subnet-07f96ebbfc41fb4aa 
+        - subnet-022d0c5b044df3fea
+        - subnet-00e0f380233928e54
+        - subnet-0576e9074b7107ed9
+      prod:
+        - subnet-0d692b01cb674c1cf
+        - subnet-071d6ad9458bf9930
+        - subnet-07f96ebbfc41fb4aa 
+        - subnet-022d0c5b044df3fea
+        - subnet-00e0f380233928e54
+        - subnet-0576e9074b7107ed9
+    us-west-2:
+      dev:
+        - subnet-0cfcbedd90ee6b60b
+        - subnet-0154d37c1555d9d42
+        - subnet-01b52027f6c2ee4e4
+        - subnet-0b905175d8cd7059a
+      qa:
+        - subnet-0cfcbedd90ee6b60b
+        - subnet-0154d37c1555d9d42
+        - subnet-01b52027f6c2ee4e4
+        - subnet-0b905175d8cd7059a
+      prod:
+        - subnet-0cfcbedd90ee6b60b
+        - subnet-0154d37c1555d9d42
+        - subnet-01b52027f6c2ee4e4
+        - subnet-0b905175d8cd7059a
+  LambdaSecurityGroups:
+    us-east-1:
+      dev:
+        - sg-087114a9d7f8a5992
+      qa:
+        - sg-087114a9d7f8a5992
+      prod:
+        - sg-087114a9d7f8a5992
+    us-west-2:
+      dev:
+        - sg-09c7864f7d503d486
+      qa:
+        - sg-09c7864f7d503d486
+      prod:
+        - sg-09c7864f7d503d486
+Resources:
+  RisingMinervaLambdaS3Splitter:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Description: Test splitting files
+      FunctionName: lambda-file-splitter
+      Handler: lambda-file-splitter.lambda_handler
+      Runtime: python3.7
+      MemorySize: !Ref LambdaMemSize
+      Timeout: !Ref LambdaTimeOut
+      Role: !FindInMap 
+        - IAMRole
+        - !Ref 'AWS::Region'
+        - !Ref Environment
+      VpcConfig:
+        SecurityGroupIds: !FindInMap 
+          - LambdaSecurityGroups
+          - !Ref 'AWS::Region'
+          - !Ref Environment
+        SubnetIds: !FindInMap 
+          - LambdaSubnets
+          - !Ref 'AWS::Region'
+          - !Ref Environment
+      Code:
+          S3Bucket: !Ref SplitterLambdaCodeS3Bucket
+          S3Key: !Ref SplitterLambdaCodeS3Key
+      Environment:
+        Variables:
+          ENV: !Ref Environment
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub 
+        - '${s3bucket}-${envt}'
+        - s3bucket: !Ref RisingMinervaS3InputBucket
+          envt: !Ref Environment
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: 'prefix'
+                    Value: 'input/'
+                  - Name: 'suffix'
+                    Value: '.txt'
+            Function: !GetAtt
+                        - RisingMinervaLambdaS3Splitter
+                        - Arn
+  LambdaInvokePermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName: !Ref RisingMinervaLambdaS3Splitter
+      Action: 'lambda:InvokeFunction'
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !Sub 
+        - 'arn:aws:s3:::${s3bucket}-${envt}'
+        - s3bucket: !Ref RisingMinervaS3InputBucket
+          envt: !Ref Environment
+Outputs:
+  LambdaArn:
+    Description: The arn of the created Lambda.
+    Value: !GetAtt 
+      - RisingMinervaLambdaS3Splitter
+      - Arn
